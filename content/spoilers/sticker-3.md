@@ -1,0 +1,1 @@
+The party collectively decides which pets to bring and applies any negative effects associated with those pets. The party can collectively bring a number of pets specified by the Stables building card, chosen from the available supply (see [p.36](#page_36)).

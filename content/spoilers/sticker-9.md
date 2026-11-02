@@ -1,0 +1,1 @@
+**Town Guard Perks:** When the party completes a scenario, the town guard gains one checkmark for every active challenge. For every set of three checkmarks, the town guard gains one perk mark. When the town guard gains a perk mark, mark an available box next to a town guard perk, then adjust the town guard deck accordingly and read the indicated section from the section book.
