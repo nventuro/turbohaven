@@ -278,7 +278,8 @@ def _segment(item: Span | Icon) -> list[dict]:
         return [{"icon": item.file}]
     text = item.text
     if is_inline_door(item):
-        return [{"door": text.strip()}]
+        # The book's font draws these letters lowercase, though its text has them uppercase.
+        return [{"door": text.strip().lower()}]
     if is_inline_scenario(item):
         return [{"scenario": text.strip()}]
     reference = SECTION_REF.fullmatch(text.strip())
@@ -321,6 +322,11 @@ def _tidy(paragraph: list[dict]) -> list[dict]:
     if paragraph and "text" in paragraph[-1]:
         paragraph[-1]["text"] = paragraph[-1]["text"].rstrip()
     return [s for s in paragraph if s.get("text") != ""]
+
+
+def _ends_with_hyphen(paragraph: list[dict]) -> bool:
+    """Whether a line breaks inside a hyphenated word, which the next line carries on without a space."""
+    return "text" in paragraph[-1] and re.search(r"\w-$", paragraph[-1]["text"]) is not None
 
 
 def _ends_sentence(paragraph: list[dict]) -> bool:
@@ -376,7 +382,7 @@ def flow_text(items: list[Span | Icon]) -> list[list[dict]]:
             )
             if new_paragraph:
                 paragraphs.append([])
-            elif paragraphs[-1]:
+            elif paragraphs[-1] and not _ends_with_hyphen(paragraphs[-1]):
                 _append(paragraphs[-1], {"text": " "})
             previous_y = y
             for item in fragment:

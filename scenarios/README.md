@@ -24,8 +24,8 @@ In Claude Code, `/add-scenario 7` does all of what follows. It also checks the
 result against the book and decides what to hold back, without showing you
 any of the scenario.
 
-**`public/data/`, `pipeline/pieces.json`, `pipeline/translations/` and
-`pipeline/.cache/` hold the scenarios' content. Opening them spoils those
+**`public/data/`, `pipeline/pieces.json`, `pipeline/translations/`,
+`pipeline/faq/` and `pipeline/.cache/` hold the scenarios' content. Opening them spoils those
 scenarios**, and so does a diff of them.
 
 The app reads `public/data/`, which the pipeline generates from the scenario
@@ -41,7 +41,7 @@ python3 -m venv .venv
 ```
 
 The first run for a scenario can stop and list tokens it has not seen before,
-with a path to an image of each. Add each one to `pipeline/pieces.json`, under
+with the rooms each is printed in and a path to an image of it. Add each one to `pipeline/pieces.json`, under
 the name it has in the book's Scenario Key, then build again. If that name
 contains icons, the text around them goes in `key` and a readable name in
 `name`. Each token only needs naming once.
@@ -56,7 +56,7 @@ boss's special abilities, rather than leave it out.
 Scenarios that run over two pages or come in A and B versions are not supported
 yet, and the build stops with an error on them.
 
-To compare a built scenario with the book,
+To compare a scenario with the book, built or not,
 `.venv/bin/python render.py 7 <folder>` renders its scenario page and each
 section's part of its page, with each map again larger.
 
@@ -65,6 +65,18 @@ give away what a door hides. `pipeline/held-back/7.json` lists the ones that
 wait for a later section: it maps a paragraph's id to the section that
 reveals it. Each build lists every paragraph with its id in
 `pipeline/.cache/paragraphs/7.md`.
+
+## The FAQ
+
+The app also shows what the [official FAQ](https://cephalofairgames.github.io/frosthaven-faq/)
+says about a scenario, each entry from the point where it applies. The
+pipeline reads the FAQ's source, pinned to a commit, and each build lists the
+entries that name the scenario, one of its sections or one of its monsters in
+`pipeline/.cache/faq/7.md`. `pipeline/faq/7.json` decides each one: the
+section it shows from (or the scenario's number, for the start), optionally
+with only the part to quote, or the reason it is left out. The build stops on
+an entry without a decision, so moving the pin to a newer FAQ brings up what
+changed.
 
 ## Translations
 

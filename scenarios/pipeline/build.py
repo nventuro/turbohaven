@@ -15,6 +15,7 @@ from pathlib import Path
 import pymupdf
 from PIL import Image
 
+import faq
 import maps
 import pages
 import sources
@@ -30,6 +31,9 @@ NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 PLAYER_COUNTS = (2, 3, 4)
 SECTION_BANNER = (0.14, 0.12, 0.13)
 LOOT_NAMES = {"random_item": "Random item"}
+# The Loot box lists kinds in this order, while GHS lists them in any order.
+LOOT_ORDER = ["money", "lumber", "metal", "hide", "arrowvine", "axenut", "corpsecap", "flamefruit",
+              "rockroot", "snowthistle", "random_item", "special1", "special2"]
 
 # The banner across the top of a scenario page ends just above its first panel.
 HEADER_BOTTOM = 98.0
@@ -47,6 +51,11 @@ HELD_BACK_KINDS = ("goals", "effects", "rules", "links")
 # Every paragraph of the last build of each scenario, with its id.
 PARAGRAPHS = sources.CACHE / "paragraphs"
 
+# For each scenario, where each FAQ entry that bears on it shows, or why it doesn't.
+FAQ_DECISIONS = ROOT / "faq"
+# The FAQ entries that bear on the last build of each scenario, to decide on.
+FAQ_FOUND = sources.CACHE / "faq"
+
 # For each language, each scenario's story paragraphs in that language, by id.
 TRANSLATIONS = ROOT / "translations"
 # The languages the app can show the story in, besides the book's English.
@@ -58,11 +67,13 @@ STORY = sources.CACHE / "story"
 class Build:
     """What is shared while reading all the pages of one scenario."""
 
-    def __init__(self):
+    def __init__(self, number: str):
+        self.number = number
         self.placed_doors: set[str] = set()
         self.piece_totals: Counter = Counter()
         self.tile_labels: list[str] = []
-        self.unknown_tokens: dict[str, Path] = {}
+        # Each token without a name, with an image of it and the rooms it is printed in.
+        self.unknown_tokens: dict[str, tuple[Path, list[str]]] = {}
         self.unknown_requirements: dict[str, Path] = {}
 
 
@@ -240,6 +251,7 @@ def loot_boxes(page: pymupdf.Page, spans: list[Span]) -> list[pages.Panel]:
 def read_loot(doc, page, spans: list[Span], ghs: dict) -> list[dict]:
     rows = loot_rows(spans)
     counts = [int(s.text.strip()[1:]) for s in rows]
+    ghs = dict(sorted(ghs.items(), key=lambda item: LOOT_ORDER.index(item[0])))
     if counts != list(ghs.values()):
         raise ValueError(f"loot differs from GHS: book {counts}, GHS {ghs}")
 
@@ -317,13 +329,24 @@ def read_room(build: Build, doc, pdf: Path, index: int, page, region: pymupdf.Re
     if not printed:
         return None
 
-    unknown = [t for t in printed.tokens if t.hash not in PIECES]
+    # A door is printed again on the map of the room behind it, sometimes from
+    # different art. It is gathered once, in the room where it is first placed,
+    # so a door already placed needs no name.
+    unknown = [
+        t for t in printed.tokens
+        if t.hash not in PIECES and not (t.door and t.door in build.placed_doors)
+    ]
     if unknown:
         probe = sources.CACHE / "unknown"
         probe.mkdir(parents=True, exist_ok=True)
+        room = f"scenario {name}" if name == build.number else f"section {name}"
         for token in unknown:
             pages.image_with_alpha(doc, token.image).save(probe / f"{token.hash}.png")
-            build.unknown_tokens[token.hash] = probe / f"{token.hash}.png"
+            path, rooms = build.unknown_tokens.setdefault(token.hash, (probe / f"{token.hash}.png", []))
+            if room not in rooms:
+                rooms.append(room)
+        # The build will stop, but the rooms after this one still need its doors to name theirs.
+        build.placed_doors |= {t.door for t in printed.tokens if t.door}
         return None
 
     art = {label: sources.tile_image(label) for label in build.tile_labels}
@@ -527,6 +550,78 @@ def hold_back(scenario: dict) -> list[tuple[str, str, str]]:
     return moved
 
 
+def bearing_entries(scenario: dict) -> dict[str, tuple[faq.Entry, list[str]]]:
+    """Returns the FAQ entries that name the scenario, one of its sections or one of its monsters.
+
+    Each comes with what it names. Finding them by name casts a wide net, so
+    that none is missed: some name the scenario only in passing, or another
+    scenario that shares a number with one of the sections.
+    """
+    number = scenario["number"]
+    rooms = [s["room"] for s in (scenario, *scenario["sections"].values()) if s.get("room")]
+    monsters = list(dict.fromkeys(m["name"] for room in rooms for m in room["monsters"]))
+    found = {}
+    for entry in faq.entries():
+        scenarios, sections = faq.references(entry)
+        names = [f"scenario {number}"] if number in scenarios else []
+        names += [f"section {s}" for s in sorted(sections & scenario["sections"].keys())]
+        names += [m for m in monsters if faq.names_monster(entry, m)]
+        if names:
+            found[entry.id] = entry, names
+    return found
+
+
+def add_faq(scenario: dict) -> int:
+    """Places each FAQ entry that bears on the scenario where its FAQ file says it shows.
+
+    Whether an entry shows, where, and whether only part of it does, is a
+    judgment made for each scenario. An entry without a decision, or a
+    decision about an entry the FAQ no longer has, stops the build, so that
+    none is missed when the FAQ changes.
+
+    Returns how many entries show.
+    """
+    number = scenario["number"]
+    everything = {number: scenario, **scenario["sections"]}
+    for source in everything.values():
+        source["faq"] = []
+
+    found = bearing_entries(scenario)
+    FAQ_FOUND.mkdir(parents=True, exist_ok=True)
+    listing = FAQ_FOUND / f"{number}.md"
+    listing.write_text("".join(
+        f"# {entry_id}\n\n- names: {', '.join(names)}\n- under: {entry.source}\n\n{entry.text}\n\n"
+        for entry_id, (entry, names) in found.items()
+    ))
+
+    path = FAQ_DECISIONS / f"{number}.json"
+    decisions = json.loads(path.read_text()) if path.exists() else {}
+    if missing := [entry_id for entry_id in found if entry_id not in decisions]:
+        raise SystemExit(f"decide in {path} where each FAQ entry listed in {listing} shows, "
+                         f"or why it doesn't: {', '.join(missing)}")
+    if stale := sorted(decisions.keys() - found.keys()):
+        raise ValueError(f"{path.name}: the FAQ has no entry {', '.join(stale)} that bears on the scenario")
+
+    shown = 0
+    for entry_id, (entry, _) in found.items():
+        decision = decisions[entry_id]
+        if set(decision) == {"omit"}:
+            continue
+        if not {"in"} <= set(decision) <= {"in", "quote"}:
+            raise ValueError(f"{path.name}: entry {entry_id} needs either \"in\", maybe with \"quote\", "
+                             f"or \"omit\"")
+        if decision["in"] not in everything:
+            raise ValueError(f"{path.name}: scenario {number} has no section {decision['in']}")
+        paragraphs = entry.paragraphs
+        if "quote" in decision:
+            if decision["quote"] not in entry.text:
+                raise ValueError(f"{path.name}: entry {entry_id} doesn't say what it quotes")
+            paragraphs = [[{"text": decision["quote"]}]]
+        everything[decision["in"]]["faq"].append({"source": entry.source, "paragraphs": paragraphs})
+        shown += 1
+    return shown
+
+
 def story_paragraphs(scenario: dict) -> dict[str, list[dict]]:
     """Returns every paragraph of the scenario's story text by id, in reading order."""
     paragraphs = {paragraph_id(p): p for p in scenario["intro"]}
@@ -608,6 +703,9 @@ def list_paragraphs(scenario: dict) -> Path:
             if source.get(kind):
                 lines.append(f"\n## {kind}\n")
                 lines += [f"- {paragraph_id(p)}: {_readable(p)}" for p in source[kind]]
+        if source.get("faq"):
+            lines.append("\n## faq\n")
+            lines += [f"- {e['source']}: {' / '.join(map(_readable, e['paragraphs']))}" for e in source["faq"]]
         if source.get("room"):
             room = source["room"]
             lines.append("\n## room\n")
@@ -628,7 +726,7 @@ def scenario_map_region(page: pymupdf.Page) -> pymupdf.Rect:
 
 def build_scenario(number: str) -> dict:
     ghs = sources.ghs_scenario(number)
-    build = Build()
+    build = Build(number)
     pdf, index = find_scenario_page(number)
     doc = pymupdf.open(pdf)
     page = doc[index]
@@ -689,8 +787,10 @@ def build_scenario(number: str) -> dict:
     scenario["sections"] = sections
 
     if build.unknown_tokens:
-        listing = "\n".join(f"  {h}  {p}" for h, p in build.unknown_tokens.items())
-        raise SystemExit(f"name these tokens in pieces.json:\n{listing}")
+        listing = "\n".join(f"  {h}  {', '.join(rooms)}  {path}"
+                            for h, (path, rooms) in build.unknown_tokens.items())
+        raise SystemExit(f"name these tokens in pieces.json (each with the rooms it is printed in):\n"
+                         f"{listing}")
     if build.unknown_requirements:
         listing = "\n".join(f"  {p}" for p in build.unknown_requirements.values())
         raise SystemExit(f"copy each of these requirement icons into {REQUIREMENT_ICONS}, "
@@ -703,6 +803,9 @@ def build_scenario(number: str) -> dict:
 
     for kind, source, target in hold_back(scenario):
         print(f"held back a {kind} paragraph from {source} until {target}")
+    # Listed before the FAQ entries are decided on, since deciding where each shows takes this listing.
+    list_paragraphs(scenario)
+    print(f"{add_faq(scenario)} FAQ entries shown")
     # Listed before the translations are checked, so a stale one can be brought up to date from it.
     print(f"story listed in {list_story(scenario)}")
     scenario["translations"] = translate(scenario)

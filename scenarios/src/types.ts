@@ -70,6 +70,13 @@ export interface LootCard {
   icon: string | null;
 }
 
+/** An answer or erratum from the official FAQ that bears on a scenario. */
+export interface FaqEntry {
+  /** The FAQ's headings it sits under, which tell an erratum from a clarification. */
+  source: string;
+  paragraphs: Paragraph[];
+}
+
 export interface Section {
   id: string;
   isConclusion: boolean;
@@ -79,6 +86,8 @@ export interface Section {
   goals: Paragraph[];
   links: Paragraph[];
   rewards: Paragraph[];
+  /** What the FAQ says about the scenario that the party needs from this section on. */
+  faq: FaqEntry[];
   room: Room | null;
 }
 
@@ -101,6 +110,8 @@ export interface Scenario {
   effects: Paragraph[];
   rules: Paragraph[];
   links: Paragraph[];
+  /** What the FAQ says about the scenario that the party needs from the start. */
+  faq: FaqEntry[];
   loot: LootCard[];
   room: Room;
   sections: Record<string, Section>;

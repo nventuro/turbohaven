@@ -13,7 +13,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright';
 import { inLanguage, LANGUAGES } from '../src/language.ts';
-import type { Language, Paragraph, PlayerCount, Room, Scenario, Section } from '../src/types.ts';
+import type { FaqEntry, Language, Paragraph, PlayerCount, Room, Scenario, Section } from '../src/types.ts';
 
 const [appArgument, number, out] = process.argv.slice(2);
 if (!appArgument || !number || !out) {
@@ -53,10 +53,15 @@ const distinctTexts = (paragraphs: Paragraph[]) =>
       'text' in segment && normalise(segment.text).length >= DISTINCT_TEXT ? [normalise(segment.text)] : [],
     ),
   );
-const sectionTexts = (section: Section) =>
-  distinctTexts([...section.story, ...PANEL_KINDS.flatMap((kind) => section[kind]), ...section.rewards]);
-const scenarioTexts = (shown: Scenario) =>
-  distinctTexts([...shown.intro, ...PANEL_KINDS.flatMap((kind) => shown[kind])]);
+const faqTexts = (entries: FaqEntry[]) => distinctTexts(entries.flatMap((entry) => entry.paragraphs));
+const sectionTexts = (section: Section) => [
+  ...distinctTexts([...section.story, ...PANEL_KINDS.flatMap((kind) => section[kind]), ...section.rewards]),
+  ...faqTexts(section.faq),
+];
+const scenarioTexts = (shown: Scenario) => [
+  ...distinctTexts([...shown.intro, ...PANEL_KINDS.flatMap((kind) => shown[kind])]),
+  ...faqTexts(shown.faq),
+];
 
 const monstersAt = (room: Room, players: PlayerCount) =>
   room.monsters.filter((monster) => Object.keys(monster.counts[players]).length);
@@ -102,7 +107,7 @@ async function heading(page: Page) {
   return (await headings.count()) ? normalise((await headings.first().textContent()) ?? '') : '';
 }
 
-/** Steps through a stepped screen to its last step, checking each one. Returns the steps' names. */
+/** Steps through a stepped screen to its last step, checking each one. Returns the steps' names and text. */
 async function walk(
   page: Page,
   shown: Scenario,
@@ -114,6 +119,7 @@ async function walk(
   shoot: boolean,
 ) {
   const steps: string[] = [];
+  const texts: string[] = [];
   for (let n = 0; ; n++) {
     await page.locator('main').waitFor();
     const step = await currentStep(page);
@@ -154,6 +160,7 @@ async function walk(
     const story =
       step === 'Introduction' ? shown.intro : ['Story', 'Conclusion'].includes(step) ? shown.sections[where].story : [];
     const onScreen = normalise(await page.locator('main').innerText());
+    texts.push(onScreen);
     if (distinctTexts(story).some((text) => !onScreen.includes(text))) fail(at, 'shows the story in another language');
     await checkHidden(page, shown, read, at);
     const overflow = await page.evaluate(
@@ -163,7 +170,7 @@ async function walk(
 
     if (shoot) await screenshot(page, `${tag.split(',')[0]}-${where}-${n + 1}`);
     const next = page.getByRole('button', { name: /^Next:/ });
-    if (!(await next.count())) return steps;
+    if (!(await next.count())) return { steps, text: texts.join(' ') };
     await next.click();
   }
 }
@@ -173,9 +180,14 @@ async function checkPlay(page: Page, shown: Scenario, tag: string, read: Set<str
   await page.locator('.play').waitFor();
   const at = `${tag} play screen ${name}`;
   await checkHidden(page, shown, read, at);
-  const goals = [scenario, ...[...read].map((id) => scenario.sections[id])].some((source) => source.goals.length);
+  const opened = [scenario, ...[...read].map((id) => scenario.sections[id])];
+  const goals = opened.some((source) => source.goals.length);
   const placeholder = await page.locator('.panel-goals .panel-note').count();
   if (goals === Boolean(placeholder)) fail(at, goals ? 'shows the goal placeholder' : 'shows no goal');
+  const onScreen = normalise(await page.locator('main').innerText());
+  if (faqTexts(opened.flatMap((source) => source.faq)).some((text) => !onScreen.includes(text))) {
+    fail(at, 'is missing an answer from the FAQ');
+  }
   if (shoot) await screenshot(page, `${tag.split(',')[0]}-play-${name.replaceAll(' ', '-')}`);
 }
 
@@ -224,7 +236,7 @@ async function play(
   }
 
   const read = new Set<string>();
-  const setup = await walk(page, shown, tag, 'setup', scenario.room, players, read, shoot);
+  const { steps: setup } = await walk(page, shown, tag, 'setup', scenario.room, players, read, shoot);
   if (skipLoot === setup.includes('Loot deck')) fail(tag, skipLoot ? 'shows the loot deck' : 'has no loot deck step');
 
   // The last step of setup shows the map, which turns a quarter at a time and stays inside its box.
@@ -277,8 +289,11 @@ async function play(
       await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
 
-    const steps = await walk(page, shown, tag, id, section.room, players, read, shoot);
+    const { steps, text } = await walk(page, shown, tag, id, section.room, players, read, shoot);
     if (section.rewards.length && !steps.includes('Rewards')) fail(tag, `section ${id} has no rewards step`);
+    if (faqTexts(section.faq).some((faq) => !text.includes(faq))) {
+      fail(tag, `section ${id} leaves out an answer from the FAQ`);
+    }
 
     if (!section.isConclusion) {
       await page.getByRole('button', { name: 'Back to the scenario' }).click();

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { dataUrl } from './data.ts';
 import { formulaLetters, type FormulaLetter } from './formulas.ts';
-import type { Paragraph, PlayerCount, Segment } from './types.ts';
+import type { FaqEntry, Paragraph, PlayerCount, Segment } from './types.ts';
 
 function renderSegment(segment: Segment, key: number): ReactNode {
   if ('icon' in segment) {
@@ -127,7 +127,7 @@ export function referencedSection(paragraph: Paragraph): string | null {
   return reference && 'section' in reference ? reference.section : null;
 }
 
-export type PanelKind = 'goals' | 'effects' | 'rules' | 'links' | 'rewards';
+export type PanelKind = 'goals' | 'effects' | 'rules' | 'links' | 'rewards' | 'faq';
 
 const PANEL_TITLES: Record<PanelKind, string> = {
   goals: 'Scenario goals',
@@ -135,6 +135,7 @@ const PANEL_TITLES: Record<PanelKind, string> = {
   rules: 'Special rules',
   links: 'Section links',
   rewards: 'Rewards',
+  faq: 'From the FAQ',
 };
 
 export function Panel({ kind, children }: { kind: PanelKind; children: ReactNode }) {
@@ -143,5 +144,24 @@ export function Panel({ kind, children }: { kind: PanelKind; children: ReactNode
       <h3>{PANEL_TITLES[kind]}</h3>
       <div className="panel-body">{children}</div>
     </section>
+  );
+}
+
+/** The FAQ's answers and errata, each under the part of the FAQ it comes from. */
+export function FaqPanel({ entries }: { entries: FaqEntry[] }) {
+  if (!entries.length) return null;
+  return (
+    <Panel kind="faq">
+      {entries.map((entry, index) => (
+        <div key={index} className="faq-entry">
+          <p className="faq-source">{entry.source}</p>
+          {entry.paragraphs.map((paragraph, line) => (
+            <p key={line}>
+              <Line paragraph={paragraph} />
+            </p>
+          ))}
+        </div>
+      ))}
+    </Panel>
   );
 }

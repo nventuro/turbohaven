@@ -48,6 +48,11 @@ def _is_glow(drawing: dict) -> bool:
     )
 
 
+def _is_disc_label(span: Span) -> bool:
+    """Whether a span is a number or letter printed in a disc on a map, as door numbers are."""
+    return span.font.startswith("Type3") and span.size > 12
+
+
 def _marker_state(doc: pymupdf.Document, image: PlacedImage) -> str | None:
     pixmap = pymupdf.Pixmap(doc, image.xref)
     if pixmap.colorspace.n != 3:
@@ -123,8 +128,7 @@ def read_map(doc: pymupdf.Document, page: pymupdf.Page, region: pymupdf.Rect,
             token.strip = stack[0].rect | stack[1].rect | stack[2].rect
         doors = [
             s for s in spans
-            if s.font.startswith("Type3") and s.size > 12
-            and token.image.rect.contains(centre(s.rect))
+            if _is_disc_label(s) and token.image.rect.contains(centre(s.rect))
         ]
         if doors:
             token.door = doors[0].text.strip()
@@ -163,7 +167,8 @@ def render_map(pdf: Path, page_index: int, printed: PrintedMap, spans: list[Span
 
     keep = [t.image.rect for t in printed.tokens]
     for span in spans:
-        if span.rect.intersects(printed.rect) and not any(r.contains(centre(span.rect)) for r in keep):
+        if (span.rect.intersects(printed.rect) and not _is_disc_label(span)
+                and not any(r.contains(centre(span.rect)) for r in keep)):
             page.add_redact_annot(span.rect, fill=False)
     page.apply_redactions(
         images=pymupdf.PDF_REDACT_IMAGE_NONE,

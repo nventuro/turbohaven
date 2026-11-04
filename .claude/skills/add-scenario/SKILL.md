@@ -60,14 +60,18 @@ disagreement.
 
 When it stops, act on the kind of stop:
 
-- **Tokens it hasn't seen.** It lists each one with an image.
-  1. Look at each image, and find the token in the Scenario Key on a render
-     of the scenario page (see step 3).
+- **Tokens it hasn't seen.** It lists each one with an image and the rooms
+  it is printed in.
+  1. Look at each image, and find the token on the render of a room it is
+     printed in and in the Scenario Key on the render of the scenario page
+     (see step 3).
   2. Add it to `pipeline/pieces.json` under the name the Key gives it.
   3. When the Key's name includes icons, the words around them go in `key`
      and a readable name in `name`, as the existing entries show.
 - **A requirement icon it hasn't seen.** Copy the listed drawing into
   `pipeline/requirements/`, named after the GHS requirement it stands for.
+- **FAQ entries without a decision.** Decide each one as step 4 says, then
+  build again.
 - **A panel or header item the app has no place for, a scenario over two
   pages, or one in A and B versions.** Stop. The app can't show these yet, and
   adding a way to is a change to the app the user decides on. Report it in
@@ -96,8 +100,8 @@ right or the maps look right, and a misread page can pass them. From
 ```
 
 It saves the scenario page and each section's part of its page, and each map
-again larger. Before the scenario builds, it saves only the scenario page.
-Open them with the Read tool and compare them with the data:
+again larger, even when the build stops. Open them with the Read tool and
+compare them with the data:
 
 - Every panel is there, under the right kind: goals, effects, special rules,
   section links, rewards.
@@ -113,10 +117,6 @@ Open them with the Read tool and compare them with the data:
 
 Fix what's wrong in the pipeline, as in step 2. Never hand-edit the generated
 files, because the next build would undo it.
-
-Check [the FAQ](https://cephalofairgames.github.io/frosthaven-faq/) for errata
-to this scenario or its sections. The app has no way to apply errata yet, so
-list any you find in the report, by section number.
 
 ## 4. Hold back what isn't revealed yet
 
@@ -195,6 +195,54 @@ The app shows a placeholder when no goal is shown yet. Apart from the
 translation in step 5, don't write any other text of your own into a
 scenario.
 
+### What the FAQ says
+
+The app also shows what the official FAQ says about the scenario: its errata
+and its answers to questions. The build finds every FAQ entry that names the
+scenario, one of its sections or one of its monsters, and lists them in
+`scenarios/pipeline/.cache/faq/$ARGUMENTS.md`. It stops until
+`scenarios/pipeline/faq/$ARGUMENTS.json` decides each one:
+
+```json
+{
+  "5d0c8e1a92f4": { "in": "$ARGUMENTS" },
+  "a71b3f06c2d8": { "in": "112.3", "quote": "the part about this scenario, copied exactly" },
+  "e49d2b7f1c35": { "omit": "about another scenario" }
+}
+```
+
+Finding entries by name casts a wide net, so leave these out with `omit` and a
+short reason that gives nothing away:
+
+- an entry that isn't about playing this scenario: one that names it only in
+  passing, names another scenario numbered like one of its sections, or names
+  one of its monsters only as an example of a general rule;
+- an erratum the book scan already has fixed. The scans are of a later
+  printing than some errata, so check each erratum about the book against the
+  page render. Showing a fixed erratum would tell the table to undo the fix.
+
+Errata about components, such as a sticker sheet or a count of standees, stay
+in: they depend on the user's copy, and the FAQ says which printing they
+apply to.
+
+Show every other entry with `in`, set to the scenario's number to show it from
+the start, or to the section to show it from:
+
+- an entry about a section, from that section;
+- an entry about a monster, from the room where that monster is first placed;
+- an entry about the conclusion, from the conclusion, where it shows with the
+  rewards;
+- an entry about the scenario as a whole, from the start, unless it gives a
+  reveal away. Then show it from the section that reveals it, by the same
+  rules as the paragraphs above.
+
+When an entry also covers other scenarios, showing all of it would spoil them.
+Add `quote` with only the part about this one, copied exactly.
+
+A rebuild keeps your decisions, and stops when the FAQ no longer has an entry
+you decided on, or has one you haven't. Build again, then check in the
+paragraphs listing that each entry is where you meant it to be.
+
 ## 5. Translate the story
 
 Run the `translate-story` skill for scenario $ARGUMENTS. It translates the
@@ -221,6 +269,7 @@ sizes, for 2, 3 and 4 characters, with the story in Spanish at phone size.
 Along the way it checks that:
 
 - every section can be opened from the play screen;
+- every FAQ entry shows, in its section and on the play screen from then on;
 - every picture and data file loads;
 - each map holds as many monsters as the lists name;
 - each story shows in the language chosen in the settings;
@@ -235,8 +284,8 @@ that stays along the bottom drawn after everything else, where it ends up
 once the screen is scrolled to its end. Look at every one of them with the
 Read tool:
 
-- at tablet size, check that each screen shows what step 3 found in the book,
-  and nothing step 4 held back;
+- at tablet size, check that each screen shows what step 3 found in the book
+  and the FAQ entries step 4 placed there, and nothing step 4 held back;
 - at portrait and phone sizes, check that everything on each screen can be
   read, and nothing is cut off, covered or squeezed;
 - at phone size, check that each story reads as `translate-story` asks.
@@ -259,7 +308,8 @@ Tell the user, without naming or describing anything in the scenario:
   they give something away;
 - whether the story is translated, and any translation you brought up to
   date, by scenario number;
-- any errata you found and couldn't apply, by section number;
+- how many FAQ entries show, and how many you left out and why, in general
+  terms such as "already fixed in the book";
 - which checks ran, and whether they passed.
 
 Don't list the files you added, or the sections the paragraphs were held back

@@ -17,6 +17,10 @@ GHS = (
     "https://raw.githubusercontent.com/Lurkars/gloomhavensecretariat/"
     "ff48a9948b0fd19f56e60816b13142074d1d9704/data/fh"
 )
+FAQ = (
+    "https://raw.githubusercontent.com/CephalofairGames/frosthaven-faq/"
+    "4339589e466dc6ac23106fbf56392f920d81ab23/index.md"
+)
 
 SCENARIO_BOOK_RANGES = [
     (2, 21), (22, 41), (42, 61), (62, 81), (82, 101), (102, 121), (122, 141), (142, 166),
@@ -40,6 +44,11 @@ def fetch(url: str, name: str) -> Path:
 def _book(kind: str, start: int, end: int) -> Path:
     name = f"fh-{kind}-book-{start}-{end}.pdf"
     return fetch(f"{WORLDHAVEN}/images/books/frosthaven/{name}", f"books/{name}")
+
+
+def faq() -> Path:
+    """Returns the official FAQ, as the Markdown its site is built from."""
+    return fetch(FAQ, "faq/index.md")
 
 
 def scenario_books() -> list[Path]:

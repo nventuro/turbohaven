@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FormulaKey, Line, Panel, referencedSection, type PanelKind } from './Rich.tsx';
+import { FaqPanel, FormulaKey, Line, Panel, referencedSection, type PanelKind } from './Rich.tsx';
 import { ScenarioBar } from './ScenarioBar.tsx';
 import { roomStep } from './SectionView.tsx';
 import type { Paragraph, PlayerCount, Run, Scenario, Section } from './types.ts';
@@ -125,6 +125,7 @@ export function Play({ scenario, run, update, onLeave }: Props) {
             'rules',
             gather((s) => s.rules),
           )}
+          <FaqPanel entries={opened.flatMap((s) => s.faq)} />
         </div>
         <div className="stack">
           {panel(

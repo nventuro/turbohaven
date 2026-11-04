@@ -1,4 +1,4 @@
-import { FormulaKey, Line, Panel, Prose, type PanelKind } from './Rich.tsx';
+import { FaqPanel, FormulaKey, Line, Panel, Prose, type PanelKind } from './Rich.tsx';
 import { gatherSteps, PLACE_LABEL, placeStep } from './RoomParts.tsx';
 import { StepScreen, type Step } from './Steps.tsx';
 import type { Paragraph, PlayerCount, Scenario, Section } from './types.ts';
@@ -23,7 +23,7 @@ function PlainPanel({ kind, paragraphs, players }: { kind: PanelKind; paragraphs
  * reading one part never gives away the next.
  */
 function sectionSteps(section: Section, players: PlayerCount): Step[] {
-  const { room, goals, effects, rules, rewards } = section;
+  const { room, goals, effects, rules, faq, rewards } = section;
   const story: Step = {
     label: section.isConclusion ? 'Conclusion' : 'Story',
     body: (
@@ -34,8 +34,11 @@ function sectionSteps(section: Section, players: PlayerCount): Step[] {
     ),
   };
   const steps: Step[] = section.story.length || section.isConclusion ? [story] : [];
+  // Nothing is played after a conclusion, so what the FAQ says about it bears on its rewards.
+  const faqWithRewards = section.isConclusion && rewards.length > 0;
+  const newRules = faqWithRewards ? [] : faq;
   if (room) steps.push(...gatherSteps(room, players));
-  if (goals.length || effects.length || rules.length) {
+  if (goals.length || effects.length || rules.length || newRules.length) {
     steps.push({
       label: 'New rules',
       body: (
@@ -45,6 +48,7 @@ function sectionSteps(section: Section, players: PlayerCount): Step[] {
             <PlainPanel kind="goals" paragraphs={goals} players={players} />
             <PlainPanel kind="effects" paragraphs={effects} players={players} />
             <PlainPanel kind="rules" paragraphs={rules} players={players} />
+            <FaqPanel entries={newRules} />
           </div>
         </>
       ),
@@ -57,6 +61,7 @@ function sectionSteps(section: Section, players: PlayerCount): Step[] {
       body: (
         <div className="stack">
           <PlainPanel kind="rewards" paragraphs={rewards} players={players} />
+          {faqWithRewards && <FaqPanel entries={faq} />}
         </div>
       ),
     });
