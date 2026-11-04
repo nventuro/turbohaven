@@ -92,23 +92,30 @@ def read_map(doc: pymupdf.Document, page: pymupdf.Page, region: pymupdf.Rect,
         if image in tiles:
             continue
         width, height = image.rect.width, image.rect.height
-        if 6 < width < 7.5 and 8 < height < 10:
+        # A monster standing on another piece is printed smaller, and so are its markers.
+        if 5 < width < 7.5 and 7 < height < 10:
             markers.append(image)
-        elif height > 30 and height < 90 and width > 30 and image.width < MIN_TILE_PIXELS * 2:
+        # Loot is narrower than a piece, even one printed smaller on another.
+        elif height > 30 and height < 90 and width > 26 and image.width < MIN_TILE_PIXELS * 2:
             if area.contains(centre(image.rect)):
                 tokens.append(Token(image, image_hash(doc, image)))
 
-    for token in tokens:
+    stacks = [[] for _ in tokens]
+    for marker in markers:
         # Neighbouring hexes overlap, so a token's bounds can also take in the
         # markers of the token next to it. Its own always hug its left edge.
-        stack = sorted(
-            (
-                m for m in markers
-                if token.image.rect.contains(centre(m.rect))
-                and 0 <= m.rect.x0 - token.image.rect.x0 < 7
-            ),
-            key=lambda m: m.rect.y0,
-        )
+        beneath = [
+            i for i, token in enumerate(tokens)
+            if token.image.rect.contains(centre(marker.rect))
+            and 0 <= marker.rect.x0 - token.image.rect.x0 < 7
+        ]
+        # A monster can stand on another piece, which then hugs the same
+        # markers. Tokens are in paint order, so the last one is the monster on top.
+        if beneath:
+            stacks[beneath[-1]].append(marker)
+
+    for token, stack in zip(tokens, stacks):
+        stack.sort(key=lambda m: m.rect.y0)
         if stack:
             if len(stack) != 3:
                 raise ValueError(f"token at {token.image.rect} has {len(stack)} player-count markers")

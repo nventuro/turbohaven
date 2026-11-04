@@ -397,6 +397,10 @@ img {
   vertical-align: -0.28em;
 }
 
+.unbroken {
+  white-space: nowrap;
+}
+
 .door-mark,
 .scenario-mark {
   display: inline-grid;

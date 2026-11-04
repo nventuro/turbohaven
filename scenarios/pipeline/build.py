@@ -201,12 +201,18 @@ def name_requirements(build: Build, requirements: list[dict], ghs: dict, where: 
         raise ValueError(f"{where}: requirements differ from GHS: book {found}, GHS {expected}")
 
 
+def key_entries(page: pymupdf.Page) -> list[pages.PlacedImage]:
+    """Returns the banners of the Scenario Key, one for each piece."""
+    return [
+        image for image in pages.read_images(page)
+        if 105 < image.rect.width < 115 and 34 < image.rect.height < 39
+    ]
+
+
 def read_key(page: pymupdf.Page, spans: list[Span]) -> dict[str, int | None]:
     """Reads the Scenario Key: its pieces, with how many the whole scenario uses."""
     key = {}
-    for image in pages.read_images(page):
-        if not (105 < image.rect.width < 115 and 34 < image.rect.height < 39):
-            continue
+    for image in key_entries(page):
         inside = [s for s in spans if image.rect.contains(centre(s.rect))]
         words = sorted((s for s in inside if s.size < 8.5), key=lambda s: (s.rect.y0, s.rect.x0))
         counts = [s for s in inside if 9 < s.size < 10]
@@ -214,11 +220,25 @@ def read_key(page: pymupdf.Page, spans: list[Span]) -> dict[str, int | None]:
     return key
 
 
-def read_loot(doc, page, spans: list[Span], ghs: dict) -> list[dict]:
-    rows = sorted(
+def loot_rows(spans: list[Span]) -> list[Span]:
+    return sorted(
         (s for s in spans if re.fullmatch(r"x\d{1,2}", s.text.strip())),
         key=lambda s: s.rect.y0,
     )
+
+
+def loot_boxes(page: pymupdf.Page, spans: list[Span]) -> list[pages.Panel]:
+    """Returns the Loot box, if the page has one, which is framed unlike the text panels."""
+    rows = loot_rows(spans)
+    frames = [
+        d["rect"] for d in page.get_drawings()
+        if d["fill"] and rows and all(d["rect"].contains(centre(s.rect)) for s in rows)
+    ]
+    return [pages.Panel("Loot", min(frames, key=lambda r: r.width * r.height))] if frames else []
+
+
+def read_loot(doc, page, spans: list[Span], ghs: dict) -> list[dict]:
+    rows = loot_rows(spans)
     counts = [int(s.text.strip()[1:]) for s in rows]
     if counts != list(ghs.values()):
         raise ValueError(f"loot differs from GHS: book {counts}, GHS {ghs}")
@@ -319,7 +339,8 @@ def read_room(build: Build, doc, pdf: Path, index: int, page, region: pymupdf.Re
     types = reconcile_monsters(book, ghs_counts(ghs_rooms), name)
 
     file = f"{name}.webp"
-    width, height = maps.render_map(pdf, index, printed, spans, pages.read_panels(page, spans),
+    width, height = maps.render_map(pdf, index, printed, spans,
+                                    pages.read_panels(page, spans) + loot_boxes(page, spans),
                                     OUT / "maps" / file)
 
     area = printed.rect
@@ -622,13 +643,15 @@ def build_scenario(number: str) -> dict:
     name_requirements(build, requirements, ghs, f"scenario {number}")
     check_panels(panels, SCENARIO_PANELS, f"scenario {number}")
 
-    heading = next(s for s in spans if s.text.strip() == "Introduction")
-    intro_area = pymupdf.Rect(heading.rect.x0 - 8, heading.rect.y1, heading.rect.x0 + 178,
-                              pages.PAGE_BOTTOM)
+    # The introduction can run on into the next column, so it is told apart by
+    # what it isn't: it is the page's only body text outside the header, the
+    # panels and the Key.
+    entries = key_entries(page)
     intro = pages.flow_text([
         s for s in spans
-        if intro_area.contains(centre(s.rect)) and pages.is_body_text(s)
+        if pages.is_body_text(s) and s.rect.y1 >= HEADER_BOTTOM
         and not any(p.rect.contains(centre(s.rect)) for p in panels)
+        and not any(e.rect.contains(centre(s.rect)) for e in entries)
     ])
 
     key = read_key(page, spans)

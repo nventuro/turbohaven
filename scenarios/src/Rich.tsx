@@ -27,8 +27,63 @@ function renderSegment(segment: Segment, key: number): ReactNode {
   return segment.text;
 }
 
+function isMark(segment: Segment): boolean {
+  return 'icon' in segment || 'door' in segment || 'scenario' in segment;
+}
+
+/**
+ * Groups each run of marks with the text that touches it without a space.
+ * Browsers will break a line on either side of a mark, even before the
+ * period that ends its sentence.
+ */
+function unbrokenRuns(paragraph: Paragraph): (Segment | Segment[])[] {
+  const runs: (Segment | Segment[])[] = [];
+  let group: Segment[] | null = null;
+  for (const segment of paragraph) {
+    if (isMark(segment)) {
+      if (!group) {
+        group = [];
+        const previous = runs.at(-1);
+        if (previous && !Array.isArray(previous) && 'text' in previous) {
+          const tail = /\S*$/.exec(previous.text)![0];
+          const rest = previous.text.slice(0, previous.text.length - tail.length);
+          if (rest) runs[runs.length - 1] = { ...previous, text: rest };
+          else runs.pop();
+          if (tail) group.push({ ...previous, text: tail });
+        }
+        runs.push(group);
+      }
+      group.push(segment);
+    } else if (group && 'text' in segment) {
+      const head = /^\S*/.exec(segment.text)![0];
+      if (head) group.push({ ...segment, text: head });
+      const rest = segment.text.slice(head.length);
+      if (rest) {
+        runs.push({ ...segment, text: rest });
+        group = null;
+      }
+    } else {
+      runs.push(segment);
+      group = null;
+    }
+  }
+  return runs;
+}
+
 export function Line({ paragraph }: { paragraph: Paragraph }) {
-  return <>{paragraph.map(renderSegment)}</>;
+  return (
+    <>
+      {unbrokenRuns(paragraph).map((run, index) =>
+        Array.isArray(run) ? (
+          <span key={index} className="unbroken">
+            {run.map(renderSegment)}
+          </span>
+        ) : (
+          renderSegment(run, index)
+        ),
+      )}
+    </>
+  );
 }
 
 export function Prose({ paragraphs }: { paragraphs: Paragraph[] }) {
