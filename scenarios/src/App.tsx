@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { loadScenario, useRun, useSettings } from './data.ts';
 import { Home } from './Home.tsx';
+import { inLanguage } from './language.ts';
 import { Play } from './Play.tsx';
 import { SectionView } from './SectionView.tsx';
 import { SettingsView } from './SettingsView.tsx';
@@ -56,6 +57,7 @@ export function App() {
     );
   }
   if (!scenario || scenario.number !== run.number) return null;
+  const shown = inLanguage(scenario, settings.language);
 
   const update = (changes: Partial<Run>) => setRun({ ...run, ...changes });
   const leave = () => setRun(null);
@@ -63,8 +65,8 @@ export function App() {
   if (run.open) {
     return (
       <SectionView
-        scenario={scenario}
-        section={scenario.sections[run.open]}
+        scenario={shown}
+        section={shown.sections[run.open]}
         players={run.players}
         step={run.sectionStep}
         onStep={(step) => update({ sectionStep: step })}
@@ -73,6 +75,6 @@ export function App() {
       />
     );
   }
-  if (run.playing) return <Play scenario={scenario} run={run} update={update} onLeave={leave} />;
-  return <Setup scenario={scenario} run={run} settings={settings} update={update} onLeave={leave} />;
+  if (run.playing) return <Play scenario={shown} run={run} update={update} onLeave={leave} />;
+  return <Setup scenario={shown} run={run} settings={settings} update={update} onLeave={leave} />;
 }

@@ -1,7 +1,8 @@
 // Plays a scenario through the app, from the keypad to its conclusion, at three
 // screen sizes and for 2, 3 and 4 characters. Saves a screenshot of every step
 // at 3 characters, each the full length of the screen, for comparing the
-// screens with the book.
+// screens with the book. At phone size it reads the story in the scenario's
+// translation, if it has one.
 //
 // usage: node scenarios/checks/walkthrough.ts <app url> <scenario number> <screenshot folder>
 //
@@ -11,7 +12,8 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Page } from 'playwright';
-import type { Paragraph, PlayerCount, Room, Scenario, Section } from '../src/types.ts';
+import { inLanguage, LANGUAGES } from '../src/language.ts';
+import type { Language, Paragraph, PlayerCount, Room, Scenario, Section } from '../src/types.ts';
 
 const [appArgument, number, out] = process.argv.slice(2);
 if (!appArgument || !number || !out) {
@@ -39,6 +41,7 @@ if (!response.ok) {
   process.exit(2);
 }
 const scenario = (await response.json()) as Scenario;
+const translation = (Object.keys(scenario.translations) as Language[]).at(0);
 const sections = Object.values(scenario.sections);
 // The book lets the party read any section it reaches, but a conclusion ends the run.
 const readingOrder = [...sections.filter((s) => !s.isConclusion), ...sections.filter((s) => s.isConclusion)];
@@ -52,7 +55,8 @@ const distinctTexts = (paragraphs: Paragraph[]) =>
   );
 const sectionTexts = (section: Section) =>
   distinctTexts([...section.story, ...PANEL_KINDS.flatMap((kind) => section[kind]), ...section.rewards]);
-const scenarioTexts = distinctTexts([...scenario.intro, ...PANEL_KINDS.flatMap((kind) => scenario[kind])]);
+const scenarioTexts = (shown: Scenario) =>
+  distinctTexts([...shown.intro, ...PANEL_KINDS.flatMap((kind) => shown[kind])]);
 
 const monstersAt = (room: Room, players: PlayerCount) =>
   room.monsters.filter((monster) => Object.keys(monster.counts[players]).length);
@@ -66,12 +70,12 @@ const fail = (...message: (string | number)[]) => {
 };
 
 /** Fails if the screen shows text that only a section the party hasn't read has. */
-async function checkHidden(page: Page, read: Set<string>, where: string) {
-  const shown = normalise(await page.locator('main').innerText());
-  const known = new Set([...scenarioTexts, ...[...read].flatMap((id) => sectionTexts(scenario.sections[id]))]);
-  for (const section of sections) {
+async function checkHidden(page: Page, shown: Scenario, read: Set<string>, where: string) {
+  const onScreen = normalise(await page.locator('main').innerText());
+  const known = new Set([...scenarioTexts(shown), ...[...read].flatMap((id) => sectionTexts(shown.sections[id]))]);
+  for (const section of Object.values(shown.sections)) {
     if (read.has(section.id)) continue;
-    if (sectionTexts(section).some((text) => !known.has(text) && shown.includes(text))) {
+    if (sectionTexts(section).some((text) => !known.has(text) && onScreen.includes(text))) {
       fail(where, `shows text from section ${section.id} before it is read`);
     }
   }
@@ -101,6 +105,7 @@ async function heading(page: Page) {
 /** Steps through a stepped screen to its last step, checking each one. Returns the steps' names. */
 async function walk(
   page: Page,
+  shown: Scenario,
   tag: string,
   where: string,
   room: Room | null,
@@ -146,7 +151,11 @@ async function walk(
     }
     if (step === 'Conclusion' && (await page.locator('.panel-rewards').count()))
       fail(at, 'shows rewards with the story');
-    await checkHidden(page, read, at);
+    const story =
+      step === 'Introduction' ? shown.intro : ['Story', 'Conclusion'].includes(step) ? shown.sections[where].story : [];
+    const onScreen = normalise(await page.locator('main').innerText());
+    if (distinctTexts(story).some((text) => !onScreen.includes(text))) fail(at, 'shows the story in another language');
+    await checkHidden(page, shown, read, at);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
@@ -160,30 +169,39 @@ async function walk(
 }
 
 /** Checks the play screen, where the party spends the scenario. */
-async function checkPlay(page: Page, tag: string, read: Set<string>, shoot: boolean, name: string) {
+async function checkPlay(page: Page, shown: Scenario, tag: string, read: Set<string>, shoot: boolean, name: string) {
   await page.locator('.play').waitFor();
   const at = `${tag} play screen ${name}`;
-  await checkHidden(page, read, at);
+  await checkHidden(page, shown, read, at);
   const goals = [scenario, ...[...read].map((id) => scenario.sections[id])].some((source) => source.goals.length);
   const placeholder = await page.locator('.panel-goals .panel-note').count();
   if (goals === Boolean(placeholder)) fail(at, goals ? 'shows the goal placeholder' : 'shows no goal');
   if (shoot) await screenshot(page, `${tag.split(',')[0]}-play-${name.replaceAll(' ', '-')}`);
 }
 
-async function checkSettings(page: Page) {
+async function changeSettings(page: Page, skipLoot: boolean, language: Language) {
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByLabel(/Skip the loot deck/).check();
+  if (skipLoot) await page.getByLabel(/Skip the loot deck/).check();
+  await page.getByLabel(LANGUAGES[language], { exact: true }).check();
   await page.getByRole('button', { name: 'Done' }).click();
 }
 
-async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boolean, shoot: boolean) {
+async function play(
+  page: Page,
+  tag: string,
+  players: PlayerCount,
+  skipLoot: boolean,
+  language: Language,
+  shoot: boolean,
+) {
+  const shown = inLanguage(scenario, language);
   await page.goto(app);
   const keypadOff = await page.evaluate(() => {
     const keys = [...document.querySelectorAll('.hex-key')].map((key) => key.getBoundingClientRect());
     return Math.max(...keys.map((key) => key.right)) - document.documentElement.clientWidth;
   });
   if (keypadOff > 0) fail(tag, `keypad runs ${keypadOff}px off screen`);
-  if (skipLoot) await checkSettings(page);
+  if (skipLoot || language !== 'en') await changeSettings(page, skipLoot, language);
 
   for (const digit of number) await page.getByRole('button', { name: digit, exact: true }).click();
   await page.getByRole('button', { name: 'Open' }).click();
@@ -206,7 +224,7 @@ async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boo
   }
 
   const read = new Set<string>();
-  const setup = await walk(page, tag, 'setup', scenario.room, players, read, shoot);
+  const setup = await walk(page, shown, tag, 'setup', scenario.room, players, read, shoot);
   if (skipLoot === setup.includes('Loot deck')) fail(tag, skipLoot ? 'shows the loot deck' : 'has no loot deck step');
 
   // The last step of setup shows the map, which turns a quarter at a time and stays inside its box.
@@ -226,7 +244,7 @@ async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boo
   if (angles.size !== 4) fail(tag, `map turns to ${angles.size} positions, not 4`);
 
   await page.getByRole('button', { name: 'Start the scenario' }).click();
-  await checkPlay(page, tag, read, shoot, 'at the start');
+  await checkPlay(page, shown, tag, read, shoot, 'at the start');
 
   const conclusions = readingOrder.filter((section) => section.isConclusion);
   let reloaded = false;
@@ -259,7 +277,7 @@ async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boo
       await page.getByRole('button', { name: 'Back', exact: true }).click();
     }
 
-    const steps = await walk(page, tag, id, section.room, players, read, shoot);
+    const steps = await walk(page, shown, tag, id, section.room, players, read, shoot);
     if (section.rewards.length && !steps.includes('Rewards')) fail(tag, `section ${id} has no rewards step`);
 
     if (!section.isConclusion) {
@@ -272,12 +290,12 @@ async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boo
         while (!(await back.count())) await page.getByRole('button', { name: /^Next:/ }).click();
         await back.click();
       }
-      await checkPlay(page, tag, read, shoot, `after ${id}`);
+      await checkPlay(page, shown, tag, read, shoot, `after ${id}`);
     } else if (section !== conclusions.at(-1)) {
       await page.evaluate((run) => localStorage.setItem('turbohaven.run', run!), saved);
       await page.reload();
       read.delete(id);
-      await checkPlay(page, tag, read, false, `after ${id}`);
+      await checkPlay(page, shown, tag, read, false, `after ${id}`);
     } else {
       await page.getByRole('button', { name: 'Finish the scenario' }).click();
       await page.getByRole('heading', { name: 'Which scenario?' }).waitFor();
@@ -289,7 +307,8 @@ async function play(page: Page, tag: string, players: PlayerCount, skipLoot: boo
 const browser = await chromium.launch();
 for (const [label, viewport] of Object.entries(VIEWPORTS)) {
   for (const players of PLAYER_COUNTS) {
-    const tag = `${label}, ${players} characters:`;
+    const language = label === 'phone' && translation ? translation : 'en';
+    const tag = `${label}, ${players} characters${language === 'en' ? '' : `, in ${language}`}:`;
     const context = await browser.newContext({ viewport, deviceScaleFactor: 2, reducedMotion: 'reduce' });
     context.setDefaultTimeout(10_000);
     const page = await context.newPage();
@@ -310,7 +329,7 @@ for (const [label, viewport] of Object.entries(VIEWPORTS)) {
     });
 
     try {
-      await play(page, tag, players, label === 'portrait' && players === 2, players === 3);
+      await play(page, tag, players, label === 'portrait' && players === 2, language, players === 3);
     } catch (error) {
       // Only the first line: the rest describes the page, which can quote it.
       fail(tag, 'stopped:', String(error).split('\n')[0]);
@@ -325,6 +344,7 @@ await browser.close();
 console.log(
   failures
     ? `${failures} failures`
-    : `scenario ${number}: all checks passed at 3 screen sizes for 2, 3 and 4 characters`,
+    : `scenario ${number}: all checks passed at 3 screen sizes for 2, 3 and 4 characters` +
+        (translation ? `, at phone size in ${translation}` : ''),
 );
 process.exitCode = failures ? 1 : 0;

@@ -7,6 +7,16 @@ export type Segment =
 
 export type Paragraph = Segment[];
 
+/** A language the story can be read in. Everything else is in English, as the game is. */
+export type Language = 'en' | 'es-AR';
+
+/** A scenario's story text in another language. */
+export interface Translation {
+  intro: Paragraph[];
+  /** Each section's story, by section id. */
+  story: Record<string, Paragraph[]>;
+}
+
 export type MonsterType = 'normal' | 'elite' | 'boss' | 'named';
 
 /** A rectangle as fractions of whatever contains it. */
@@ -94,6 +104,8 @@ export interface Scenario {
   loot: LootCard[];
   room: Room;
   sections: Record<string, Section>;
+  /** The story text in each language it has been translated into. */
+  translations: Partial<Record<Language, Translation>>;
 }
 
 export type PlayerCount = 2 | 3 | 4;
@@ -118,4 +130,6 @@ export interface Run {
 export interface Settings {
   /** Leaves the loot deck out of setup, for groups whose app builds it. */
   skipLoot: boolean;
+  /** The language the story is read in. */
+  language: Language;
 }

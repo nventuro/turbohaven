@@ -5,7 +5,7 @@ import type { Run, Scenario, Settings } from './types.ts';
 
 const RUN_KEY = 'turbohaven.run';
 const SETTINGS_KEY = 'turbohaven.scenario-settings';
-const DEFAULT_SETTINGS: Settings = { skipLoot: false };
+const DEFAULT_SETTINGS: Settings = { skipLoot: false, language: 'en' };
 
 export function dataUrl(path: string): string {
   return `${import.meta.env.BASE_URL}data/${path}`;

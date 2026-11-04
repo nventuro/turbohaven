@@ -191,10 +191,22 @@ A rebuild keeps your decisions, and stops if the book no longer has one of the
 paragraphs. Build again, then check in the new listing that each held-back
 paragraph is where you meant it to be.
 
-The app shows a placeholder when no goal is shown yet. Don't write any other
-text of your own into a scenario.
+The app shows a placeholder when no goal is shown yet. Apart from the
+translation in step 5, don't write any other text of your own into a
+scenario.
 
-## 5. Walk through it in the app
+## 5. Translate the story
+
+Run the `translate-story` skill for scenario $ARGUMENTS. It translates the
+story text into Spanish, in
+`scenarios/pipeline/translations/es-AR/$ARGUMENTS.json`, and builds the
+scenario again until the build accepts the translation.
+
+If a pipeline change in step 2 changed the story of a scenario already in the
+app, its build stops on its translation. Bring that one up to date the same
+way.
+
+## 6. Walk through it in the app
 
 Start the dev server from the repository root with `npm run dev`, in the
 background, if it isn't running. Then run the walkthrough from the repository
@@ -205,11 +217,13 @@ node scenarios/checks/walkthrough.ts http://localhost:5173/scenarios/ $ARGUMENTS
 ```
 
 It plays the scenario from the keypad to its conclusion at three screen
-sizes, for 2, 3 and 4 characters. Along the way it checks that:
+sizes, for 2, 3 and 4 characters, with the story in Spanish at phone size.
+Along the way it checks that:
 
 - every section can be opened from the play screen;
 - every picture and data file loads;
 - each map holds as many monsters as the lists name;
+- each story shows in the language chosen in the settings;
 - no screen shows text that only a section not yet read has;
 - rewards come after the conclusion's story.
 
@@ -224,12 +238,13 @@ Read tool:
 - at tablet size, check that each screen shows what step 3 found in the book,
   and nothing step 4 held back;
 - at portrait and phone sizes, check that everything on each screen can be
-  read, and nothing is cut off, covered or squeezed.
+  read, and nothing is cut off, covered or squeezed;
+- at phone size, check that each story reads as `translate-story` asks.
 
 Then run `npm run build` from the repository root. It runs Prettier, the type
 checks and every build.
 
-## 6. Report
+## 7. Report
 
 Leave everything in the working tree.
 
@@ -242,6 +257,8 @@ Tell the user, without naming or describing anything in the scenario:
   not its content;
 - how many paragraphs you held back, and how many you left showing although
   they give something away;
+- whether the story is translated, and any translation you brought up to
+  date, by scenario number;
 - any errata you found and couldn't apply, by section number;
 - which checks ran, and whether they passed.
 

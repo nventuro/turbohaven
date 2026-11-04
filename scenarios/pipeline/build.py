@@ -47,6 +47,13 @@ HELD_BACK_KINDS = ("goals", "effects", "rules", "links")
 # Every paragraph of the last build of each scenario, with its id.
 PARAGRAPHS = sources.CACHE / "paragraphs"
 
+# For each language, each scenario's story paragraphs in that language, by id.
+TRANSLATIONS = ROOT / "translations"
+# The languages the app can show the story in, besides the book's English.
+LANGUAGES = ("es-AR",)
+# Every story paragraph of the last build of each scenario, by id, to translate from.
+STORY = sources.CACHE / "story"
+
 
 class Build:
     """What is shared while reading all the pages of one scenario."""
@@ -499,6 +506,65 @@ def hold_back(scenario: dict) -> list[tuple[str, str, str]]:
     return moved
 
 
+def story_paragraphs(scenario: dict) -> dict[str, list[dict]]:
+    """Returns every paragraph of the scenario's story text by id, in reading order."""
+    paragraphs = {paragraph_id(p): p for p in scenario["intro"]}
+    for section in scenario["sections"].values():
+        paragraphs |= {paragraph_id(p): p for p in section["story"]}
+    return paragraphs
+
+
+def _marks(paragraph: list[dict]) -> list[dict]:
+    return [segment for segment in paragraph if "text" not in segment]
+
+
+def translate(scenario: dict) -> dict:
+    """Returns the scenario's story text in each language it has been translated into.
+
+    A translation maps each story paragraph's id to that paragraph in its
+    language. It must cover every story paragraph and nothing else, and keep
+    each paragraph's icons, doors, scenarios and sections in order, so that a
+    change to the book stops the build instead of leaving the translation
+    behind it.
+    """
+    originals = story_paragraphs(scenario)
+    translations = {}
+    for language in LANGUAGES:
+        path = TRANSLATIONS / language / f"{scenario['number']}.json"
+        if not path.exists():
+            continue
+        where = f"{language}/{path.name}"
+        translated = json.loads(path.read_text())
+        if missing := sorted(originals.keys() - translated.keys()):
+            raise ValueError(f"{where}: no translation of paragraphs {', '.join(missing)}")
+        if extra := sorted(translated.keys() - originals.keys()):
+            raise ValueError(f"{where}: the book has no story paragraphs {', '.join(extra)}")
+        for key, paragraph in translated.items():
+            texts = [segment for segment in paragraph if "text" in segment]
+            if not all(isinstance(s["text"], str) and set(s) <= {"text", "bold", "italic"} for s in texts):
+                raise ValueError(f"{where}: paragraph {key} has a text segment the app can't show")
+            if _marks(paragraph) != _marks(originals[key]):
+                raise ValueError(f"{where}: paragraph {key} doesn't keep the book's icons, doors, "
+                                 f"scenarios and sections in order")
+
+        def story(paragraphs: list[list[dict]]) -> list[list[dict]]:
+            return [translated[paragraph_id(p)] for p in paragraphs]
+
+        translations[language] = {
+            "intro": story(scenario["intro"]),
+            "story": {key: story(section["story"]) for key, section in scenario["sections"].items()},
+        }
+    return translations
+
+
+def list_story(scenario: dict) -> Path:
+    """Writes every story paragraph of a built scenario by id, for translating."""
+    STORY.mkdir(parents=True, exist_ok=True)
+    path = STORY / f"{scenario['number']}.json"
+    path.write_text(json.dumps(story_paragraphs(scenario), ensure_ascii=False, indent=2) + "\n")
+    return path
+
+
 def _readable(paragraph: list[dict]) -> str:
     marks = {"icon": "icon {}", "door": "door {}", "scenario": "scenario {}", "section": "section {}"}
     parts = []
@@ -614,6 +680,11 @@ def build_scenario(number: str) -> dict:
 
     for kind, source, target in hold_back(scenario):
         print(f"held back a {kind} paragraph from {source} until {target}")
+    # Listed before the translations are checked, so a stale one can be brought up to date from it.
+    print(f"story listed in {list_story(scenario)}")
+    scenario["translations"] = translate(scenario)
+    for language in scenario["translations"]:
+        print(f"story translated into {language}")
     return scenario
 
 

@@ -24,9 +24,9 @@ In Claude Code, `/add-scenario 7` does all of what follows. It also checks the
 result against the book and decides what to hold back, without showing you
 any of the scenario.
 
-**`public/data/`, `pipeline/pieces.json` and `pipeline/.cache/` hold the
-scenarios' content. Opening them spoils those scenarios**, and so does a diff
-of them.
+**`public/data/`, `pipeline/pieces.json`, `pipeline/translations/` and
+`pipeline/.cache/` hold the scenarios' content. Opening them spoils those
+scenarios**, and so does a diff of them.
 
 The app reads `public/data/`, which the pipeline generates from the scenario
 and section books in [Worldhaven](https://github.com/any2cards/worldhaven).
@@ -66,11 +66,24 @@ wait for a later section: it maps a paragraph's id to the section that
 reveals it. Each build lists every paragraph with its id in
 `pipeline/.cache/paragraphs/7.md`.
 
+## Translations
+
+The settings choose the language the story is read in. Everything else stays
+in English, as the game is. `pipeline/translations/es-AR/7.json` holds
+scenario 7's story in Spanish, as a map from each paragraph's id to that
+paragraph translated, and the build adds it to the scenario's data. Each
+build lists the story's paragraphs by id in `pipeline/.cache/story/7.json` to
+translate from, and stops if a translation misses one, has one the book
+doesn't, or loses a paragraph's icons, doors, scenarios or sections. In
+Claude Code, `/translate-story 7` writes or updates the translation, and
+`/add-scenario` runs it.
+
 ## Checking a scenario in the app
 
 From the repository's root, with the dev server running, this plays a
 scenario from the keypad to its conclusion at three screen sizes for 2, 3 and
-4 characters, and saves a full-length screenshot of every step:
+4 characters, with the story in its translation at phone size, and saves a
+full-length screenshot of every step:
 
 ```sh
 node scenarios/checks/walkthrough.ts http://localhost:5173/scenarios/ 7 <screenshot folder>

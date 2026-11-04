@@ -608,6 +608,28 @@ button.trigger:hover {
   color: var(--iron);
 }
 
+.setting-choice {
+  cursor: auto;
+}
+
+.setting-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.8rem;
+  margin-top: 0.7rem;
+}
+
+.setting-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.setting-option input {
+  margin: 0;
+}
+
 /* Things to find */
 
 .tiles {
