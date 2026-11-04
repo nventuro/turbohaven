@@ -1,3 +1,5 @@
+import { readStored, writeStored } from '../../shared/storage.ts';
+
 export interface Saved {
   /** Spoilers the group has turned on. */
   spoilers: string[];
@@ -8,38 +10,20 @@ export interface Saved {
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem'>;
 
 const KEY = 'turbohaven';
-const NOTHING_SAVED: Saved = { spoilers: [], collapsed: [] };
 
 const isTextList = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 
-/** The browser's saved storage, or nothing where the browser refuses access to it. */
-export function browserStorage(): Storage | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Reads the saved choices, falling back to none if they're missing or unreadable. */
 export function readSaved(storage: Storage | undefined): Saved {
-  try {
-    const parsed: unknown = JSON.parse(storage?.getItem(KEY) ?? 'null');
-    const { spoilers, collapsed } = (parsed ?? {}) as Partial<Saved>;
-    return { spoilers: isTextList(spoilers) ? spoilers : [], collapsed: isTextList(collapsed) ? collapsed : [] };
-  } catch {
-    return NOTHING_SAVED;
-  }
+  const saved = readStored(storage, KEY);
+  const { spoilers, collapsed } = (typeof saved === 'object' && saved ? saved : {}) as Partial<Saved>;
+  return { spoilers: isTextList(spoilers) ? spoilers : [], collapsed: isTextList(collapsed) ? collapsed : [] };
 }
 
 /** Saves the choices if the browser allows it; they then last only for this visit otherwise. */
 export function writeSaved(storage: Storage | undefined, saved: Saved): void {
-  try {
-    storage?.setItem(KEY, JSON.stringify(saved));
-  } catch {
-    // A full or blocked storage only costs the reader their saved choices.
-  }
+  writeStored(storage, KEY, saved);
 }
 
 /** Reads the spoiler list out of a shared link, or returns null if the link has none. */

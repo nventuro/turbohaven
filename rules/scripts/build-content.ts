@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import MarkdownIt from 'markdown-it';
@@ -186,18 +186,23 @@ export function buildContent(contentDir: string, outDir: string): void {
   }
   if (files.size > 0) throw new Error(`The rules have no place for ${[...files].join(', ')}`);
 
-  rmSync(outDir, { recursive: true, force: true });
+  // Files are overwritten rather than deleted and written again, because a
+  // running dev server stops serving a file it saw deleted.
   mkdirSync(join(outDir, 'spoilers'), { recursive: true });
+  const written = new Set<string>();
+  const write = (path: string, data: unknown) => {
+    writeFileSync(join(outDir, path), JSON.stringify(data));
+    written.add(path);
+  };
   const rulebook: Rulebook = { sections, spoilers };
-  writeFileSync(join(outDir, 'rulebook.json'), JSON.stringify(rulebook));
+  write('rulebook.json', rulebook);
   for (const spoiler of spoilers) {
-    const content = buildSpoiler(spoiler, read(spoilersDir, `${spoiler.id}.md`));
-    writeFileSync(join(outDir, 'spoilers', `${spoiler.id}.json`), JSON.stringify(content));
+    write(join('spoilers', `${spoiler.id}.json`), buildSpoiler(spoiler, read(spoilersDir, `${spoiler.id}.md`)));
   }
-  writeFileSync(
-    join(outDir, 'spoilers', 'treasures.json'),
-    JSON.stringify(buildTreasures(read(spoilersDir, 'appendix-e.md'))),
-  );
+  write(join('spoilers', 'treasures.json'), buildTreasures(read(spoilersDir, 'appendix-e.md')));
+  for (const path of readdirSync(outDir, { recursive: true, encoding: 'utf8' })) {
+    if (!written.has(path) && statSync(join(outDir, path)).isFile()) rmSync(join(outDir, path));
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

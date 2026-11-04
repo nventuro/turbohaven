@@ -1,38 +1,4 @@
-:root {
-  --frost: #e7eff4;
-  --paper: #f8fbfc;
-  --ink: #14232d;
-  --iron: #52626c;
-  --rule: #c3d2da;
-  --hatch: #dbe5ea;
-  --glacier: #15638f;
-  --glacier-wash: #e0edf4;
-  --seal: #97302b;
-  --seal-light: #c4574c;
-  --seal-dark: #631a17;
-  --seal-wash: #f6e6e2;
-  --on-seal: #fbeee6;
-
-  --display: 'Pirata One', 'Germania One', serif;
-  --heading: 'Germania One', 'Bitter', serif;
-  --body: 'Bitter', Georgia, serif;
-
-  --header: 3.75rem;
-}
-
 @media (prefers-color-scheme: dark) {
-  :root {
-    --frost: #101d26;
-    --paper: #16252f;
-    --ink: #e4edf2;
-    --iron: #9db0bb;
-    --rule: #2f4553;
-    --hatch: #213542;
-    --glacier: #7cc0e6;
-    --glacier-wash: #1c3443;
-    --seal-wash: #3a2422;
-  }
-
   .section-body img,
   .sticker-body img,
   .treasure-result img {
@@ -41,56 +7,8 @@
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
 html {
   scroll-padding-top: calc(var(--header) + 1rem);
-  -webkit-text-size-adjust: 100%;
-}
-
-body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font: 400 1.0625rem/1.65 var(--body);
-}
-
-a {
-  color: var(--glacier);
-}
-
-:focus-visible {
-  outline: 2px solid var(--glacier);
-  outline-offset: 2px;
-}
-
-button,
-input {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  padding: 0.3rem 0.65rem;
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: var(--iron);
-}
-
-input {
-  padding: 0.35rem 0.6rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
 }
 
 .load-error {
@@ -98,23 +16,6 @@ input {
 }
 
 /* Header */
-
-.top {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  min-height: var(--header);
-  padding: 0.5rem 1rem;
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
-}
-
-.brand {
-  font: 400 1.7rem/1 var(--display);
-}
 
 .contents-button {
   display: none;
@@ -650,10 +551,16 @@ blockquote p {
     order: 2;
   }
 
+  /* Wide enough that it never fits beside the first row's buttons, so it
+     always starts the second row, with the link to the other app after it. */
   .search {
-    flex-basis: 100%;
+    flex: 1 0 60%;
     max-width: none;
     order: 3;
+  }
+
+  .site-link {
+    order: 4;
   }
 
   .layout {

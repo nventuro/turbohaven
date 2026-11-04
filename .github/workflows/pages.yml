@@ -1,10 +1,8 @@
-name: Publish rulebook
+name: Publish site
 
 on:
   push:
     branches: [main]
-    # The scenario helper is a separate app, so its changes don't touch this site.
-    paths-ignore: ['scenarios/**']
   workflow_dispatch:
 
 permissions:

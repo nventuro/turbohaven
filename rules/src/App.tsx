@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
+import { loadJson } from '../../shared/load.ts';
+import { SiteHeader } from '../../shared/SiteHeader.tsx';
+import { browserStorage } from '../../shared/storage.ts';
 import { Contents } from './Contents.tsx';
 import type { SpoilerState } from './compose.ts';
-import { loadJson } from './load.ts';
 import { buildIndex } from './search.ts';
 import { SearchBox } from './SearchBox.tsx';
 import { SectionView } from './SectionView.tsx';
 import { SpoilerPanel } from './SpoilerPanel.tsx';
-import { browserStorage, readSaved, sharedSpoilers, writeSaved } from './state.ts';
+import { readSaved, sharedSpoilers, writeSaved } from './state.ts';
 import type { Rulebook, SpoilerContent } from './types.ts';
 
 const withEntry = (set: Set<string>, id: string) => new Set(set).add(id);
@@ -65,7 +67,11 @@ export function App() {
     const target = document.getElementById(id);
     if (!target) return;
     const path: string[] = [];
-    for (let details = target.closest('details'); details; details = details.parentElement?.closest('details') ?? null) {
+    for (
+      let details = target.closest('details');
+      details;
+      details = details.parentElement?.closest('details') ?? null
+    ) {
       if (details.id) path.push(details.id);
     }
     flushSync(() => setRevealed((current) => new Set([...current, ...path])));
@@ -138,17 +144,20 @@ export function App() {
 
   return (
     <>
-      <header className="top">
-        <button type="button" className="contents-button" onClick={() => setContentsOpen((open) => !open)}>
-          Contents
-        </button>
-        <span className="brand">Turbohaven</span>
+      <SiteHeader
+        app="rules"
+        start={
+          <button type="button" className="contents-button" onClick={() => setContentsOpen((open) => !open)}>
+            Contents
+          </button>
+        }
+      >
         <SearchBox index={index} onPick={goTo} />
         <button type="button" className="spoilers-button" onClick={() => setPanelOpen(true)}>
           Spoilers
           <span className="seal">{added.size}</span>
         </button>
-      </header>
+      </SiteHeader>
 
       <div className="layout">
         <nav className={contentsOpen ? 'sidebar open' : 'sidebar'} aria-label="Contents">

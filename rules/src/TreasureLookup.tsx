@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { loadJson } from './load.ts';
+import { loadJson } from '../../shared/load.ts';
 import type { Treasures } from './types.ts';
 
 type Result = { html: string } | { message: string };
@@ -39,7 +39,9 @@ export function TreasureLookup() {
         />
       </label>
       <button type="submit">Read treasure</button>
-      {result && 'html' in result && <p className="treasure-result" dangerouslySetInnerHTML={{ __html: result.html }} />}
+      {result && 'html' in result && (
+        <p className="treasure-result" dangerouslySetInnerHTML={{ __html: result.html }} />
+      )}
       {result && 'message' in result && <p className="treasure-result">{result.message}</p>}
     </form>
   );
