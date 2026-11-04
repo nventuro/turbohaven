@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import pymupdf
+from PIL import Image
 
 import maps
 import pages
@@ -310,7 +311,7 @@ def read_room(build: Build, doc, pdf: Path, index: int, page, region: pymupdf.Re
     book = book_counts(monsters)
     types = reconcile_monsters(book, ghs_counts(ghs_rooms), name)
 
-    file = f"{name}.png"
+    file = f"{name}.webp"
     width, height = maps.render_map(pdf, index, printed, spans, pages.read_panels(page, spans),
                                     OUT / "maps" / file)
 
@@ -346,8 +347,9 @@ def read_room(build: Build, doc, pdf: Path, index: int, page, region: pymupdf.Re
         if standee:
             # Named after its content, as tokens are, so that a list of the
             # app's files doesn't give away which monsters a scenario has.
-            standees[monster] = hashlib.sha1(standee.read_bytes()).hexdigest()[:12] + ".png"
-            pages.write_if_changed(OUT / "standees" / standees[monster], standee.read_bytes())
+            data = pages.webp(Image.open(standee))
+            standees[monster] = hashlib.sha1(data).hexdigest()[:12] + ".webp"
+            pages.write_if_changed(OUT / "standees" / standees[monster], data)
 
     listed = Counter()
     thumbnails = {}
@@ -362,7 +364,7 @@ def read_room(build: Build, doc, pdf: Path, index: int, page, region: pymupdf.Re
         build.piece_totals[piece.get("key", piece["name"])] += 1
 
     for label in tiles:
-        pages.write_if_changed(OUT / "tiles" / f"{label}.png", art[label].read_bytes())
+        pages.write_if_changed(OUT / "tiles" / f"{label}.webp", pages.webp(Image.open(art[label])))
 
     return {
         "tiles": tiles,

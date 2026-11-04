@@ -110,7 +110,7 @@ export function TileList({ tiles }: { tiles: string[] }) {
     <ul className="tiles">
       {tiles.map((tile) => (
         <li key={tile}>
-          <img src={dataUrl(`tiles/${tile}.png`)} alt="" />
+          <img src={dataUrl(`tiles/${tile}.webp`)} alt="" />
           <span>{tile}</span>
         </li>
       ))}

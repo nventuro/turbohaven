@@ -6,11 +6,13 @@ content has a consistent encoding, which is what the readers here rely on.
 """
 
 import hashlib
+import io
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import pymupdf
+from PIL import Image
 
 SECTION_REF = re.compile(r"(\d{1,3}\.\d{1,2})([.,;:]?)")
 TILE_LABEL = re.compile(r"\d{2}-[A-Z]")
@@ -257,6 +259,18 @@ def write_if_changed(path: Path, data: bytes) -> None:
     """
     if not path.exists() or path.read_bytes() != data:
         path.write_bytes(data)
+
+
+def webp(image: Image.Image) -> bytes:
+    """Encodes a picture for the app, keeping its transparency.
+
+    The pictures are kept in the repository and every version of them stays in
+    its history, so they are stored lossy, at a quality whose loss doesn't show
+    at the size the app draws them, for a fraction of the size of PNG.
+    """
+    data = io.BytesIO()
+    image.save(data, "WEBP", quality=85, method=6)
+    return data.getvalue()
 
 
 def _segment(item: Span | Icon) -> list[dict]:

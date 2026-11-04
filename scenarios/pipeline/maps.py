@@ -1,7 +1,6 @@
 """Reads the scenario maps printed in the books."""
 
 import hashlib
-import io
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,7 +9,7 @@ import pymupdf
 from PIL import Image, ImageDraw
 
 from pages import (Panel, PlacedImage, Span, centre, image_hash, image_with_alpha, read_images,
-                   write_if_changed)
+                   webp, write_if_changed)
 
 # The soft blue glow painted behind every real tile. Faded previews of a
 # neighbouring tile do not have one.
@@ -174,9 +173,7 @@ def render_map(pdf: Path, page_index: int, printed: PrintedMap, spans: list[Span
             box = [(frame.x0 - printed.rect.x0) * scale, (frame.y0 - printed.rect.y0) * scale,
                    (frame.x1 - printed.rect.x0) * scale, (frame.y1 - printed.rect.y0) * scale]
             ImageDraw.Draw(image).rectangle(box, fill=(0, 0, 0, 0))
-    png = io.BytesIO()
-    image.save(png, "PNG")
-    write_if_changed(out, png.getvalue())
+    write_if_changed(out, webp(image))
     return pixmap.width, pixmap.height
 
 
